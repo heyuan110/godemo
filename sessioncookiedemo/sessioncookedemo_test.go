@@ -37,6 +37,7 @@ type Provider interface {
 }
 
 var globalSessions *Manager
+//初始化一个记录Provider的map
 var provides =  make(map[string]Provider)
 
 func NewManager(provideName, cookieName string,maxlifetime int64)(*Manager,error)  {
@@ -62,7 +63,9 @@ func (manager *Manager)sessionId() string  {
 	if _,err := io.ReadFull(rand.Reader,b); err != nil {
 		return ""
 	}
-	return base64.URLEncoding.EncodeToString(b)
+	sid := base64.URLEncoding.EncodeToString(b)
+	println("sid:",sid)
+	return sid
 }
 
 func (manager *Manager)SessionStart(w http.ResponseWriter, r *http.Request)(session Session)  {
@@ -102,6 +105,7 @@ func (manager *Manager) GC() {
 	time.AfterFunc(time.Duration(manager.maxlifetime), func() { manager.GC() })
 }
 
+//初始化一个空链表
 var pder = &MProvider{list: list.New()}
 
 type MProvider struct {
@@ -202,7 +206,7 @@ func (pder *MProvider)SessionUpdate(sid string) error{
 }
 
 func count(w http.ResponseWriter,r *http.Request)  {
-	println(globalSessions,989)
+	println(globalSessions.provider,989)
 	sess := globalSessions.SessionStart(w,r)
 	createtime := sess.Get("createtime")
 	if createtime == nil{
@@ -236,14 +240,21 @@ func login(w http.ResponseWriter,r *http.Request)  {
 }
 
 func init() {
+	println("pder初始化")
 	pder.sessions = make(map[string]*list.Element, 0)
+	println("pder注册到map里，以memory为key")
 	Register("memory",pder)
+	println("初始化Provide的名称，Cookie名称，最大存活时间")
 	globalSessions, _ = NewManager("memory","gosessionid",3600)
+	println("异步并发清理session")
 	go globalSessions.GC()
 }
 
 func TestSession(t *testing.T)  {
+	println("启动服务...")
 	http.HandleFunc("/count",count)
+	http.HandleFunc("/login",login)
+	println("打开浏览器http://localhost:9090")
 	err := http.ListenAndServe(":9090",nil)
 	if err != nil {
 		log.Fatal("Listen and server:", err)
