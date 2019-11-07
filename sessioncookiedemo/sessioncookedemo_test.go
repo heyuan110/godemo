@@ -193,7 +193,6 @@ func (pder *MProvider)SessionGC(maxlifetime int64)  {
 	}
 }
 
-
 func (pder *MProvider)SessionUpdate(sid string) error{
 	pder.lock.Lock()
 	defer pder.lock.Unlock()
