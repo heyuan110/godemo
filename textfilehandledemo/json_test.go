@@ -3,11 +3,12 @@ package textfilehandledemo
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/bitly/go-simplejson"
 	"testing"
 )
 
 type Server struct {
-	ServerName string
+	ServerName string `json:"server_name"`
 	ServerIP string
 }
 
@@ -53,3 +54,43 @@ func TestParseJsonToInterface(t *testing.T)  {
 		}
 	}
 }
+
+func TestSimpleJson(t *testing.T)  {
+	js,err := simplejson.NewJson([]byte(`{
+    "test": {
+        "array": [1, "2", 3],
+        "int": 10,
+        "float": 5.150,
+        "bignum": 9223372036854775807,
+        "string": "simplejson",
+        "bool": true
+    }
+}`))
+
+	if err != nil {
+		panic(err)
+	}
+	arr, _ := js.Get("test").Get("array").Array()
+	i, _ := js.Get("test").Get("int").Int()
+	ms := js.Get("test").Get("string").MustString()
+	fmt.Println(arr,i,ms)
+}
+
+func TestExportJson(t *testing.T)  {
+	var s Serverslice
+	s.Servers = append(s.Servers,Server{ServerName:"ubuntu1",ServerIP:"192.168.11.119"})
+	s.Servers = append(s.Servers,Server{ServerName:"ubuntu2",ServerIP:"192.168.11.112"})
+	b,err := json.Marshal(s)
+	if err != nil {
+		fmt.Println("json err",err)
+	}
+	fmt.Println(string(b))
+
+	var s_arr []Server
+	s_arr = append(s_arr,Server{ServerName:"ubuntu1",ServerIP:"192.168.11.119"})
+	s_arr = append(s_arr,Server{ServerName:"ubuntu2",ServerIP:"192.168.11.129"})
+	b1,_ := json.Marshal(s_arr)
+	fmt.Println(string(b1))
+
+	}
+
