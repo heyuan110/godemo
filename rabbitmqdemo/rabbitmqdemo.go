@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	rabbitmq "godemo/rabbitmqlib"
+	"godemo/rabbitmq"
 )
 
 type Chat struct {
