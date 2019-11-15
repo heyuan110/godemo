@@ -131,7 +131,7 @@ func (r *RabbitMQ)publishMessage(msg string) error {
 }
 
 func (r *RabbitMQ)consumeMessage(consumer Consumer) {
-	_:=r.channel.Qos(1,0,true)
+	err :=r.channel.Qos(1,0,true)
 	msgList,err := r.channel.Consume(r.queueName,"test",false,false,false,false,nil)
 	if err != nil{
 		showError(err,"Failed to consume message")
