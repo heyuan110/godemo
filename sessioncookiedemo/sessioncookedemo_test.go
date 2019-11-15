@@ -16,9 +16,9 @@ import (
 )
 
 type Manager struct {
-	cookieName string //private cookiename
-	lock sync.Mutex //protects session
-	provider Provider
+	cookieName  string     //private cookiename
+	lock        sync.Mutex //protects session
+	provider    Provider
 	maxlifetime int64
 }
 
@@ -37,54 +37,55 @@ type Provider interface {
 }
 
 var globalSessions *Manager
-//初始化一个记录Provider的map
-var provides =  make(map[string]Provider)
 
-func NewManager(provideName, cookieName string,maxlifetime int64)(*Manager,error)  {
+//初始化一个记录Provider的map
+var provides = make(map[string]Provider)
+
+func NewManager(provideName, cookieName string, maxlifetime int64) (*Manager, error) {
 	provider, ok := provides[provideName]
 	if !ok {
 		return nil, fmt.Errorf("session: unknown provide %q (forgotten import?)", provideName)
 	}
-	return &Manager{provider:provider,cookieName:cookieName,maxlifetime:maxlifetime},nil
+	return &Manager{provider: provider, cookieName: cookieName, maxlifetime: maxlifetime}, nil
 }
 
-func Register(name string,provider Provider)  {
+func Register(name string, provider Provider) {
 	if provider == nil {
 		panic("session: Register provide is nil")
 	}
 	if _, ok := provides[name]; ok {
 		panic("session: Register called twice for provide " + name)
 	}
-	provides[name]=provider
+	provides[name] = provider
 }
 
-func (manager *Manager)sessionId() string  {
-	b := make([]byte,32)
-	if _,err := io.ReadFull(rand.Reader,b); err != nil {
+func (manager *Manager) sessionId() string {
+	b := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return ""
 	}
 	sid := base64.URLEncoding.EncodeToString(b)
-	println("sid:",sid)
+	println("sid:", sid)
 	return sid
 }
 
-func (manager *Manager)SessionStart(w http.ResponseWriter, r *http.Request)(session Session)  {
+func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session Session) {
 	manager.lock.Lock()
 	defer manager.lock.Unlock()
-	cookie,err := r.Cookie(manager.cookieName)
+	cookie, err := r.Cookie(manager.cookieName)
 	if err != nil || cookie.Value == "" {
 		sid := manager.sessionId()
 		session, _ = manager.provider.SessionInit(sid)
 		cookie := http.Cookie{Name: manager.cookieName, Value: url.QueryEscape(sid), Path: "/", HttpOnly: true, MaxAge: int(manager.maxlifetime)}
-		http.SetCookie(w,&cookie)
-	}else{
-		sid,_ := url.QueryUnescape(cookie.Value)
-		session,_ = manager.provider.SessionRead(sid)
+		http.SetCookie(w, &cookie)
+	} else {
+		sid, _ := url.QueryUnescape(cookie.Value)
+		session, _ = manager.provider.SessionRead(sid)
 	}
 	return
 }
 
-func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request){
+func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(manager.cookieName)
 	if err != nil || cookie.Value == "" {
 		return
@@ -109,48 +110,48 @@ func (manager *Manager) GC() {
 var pder = &MProvider{list: list.New()}
 
 type MProvider struct {
-	lock sync.Mutex
+	lock     sync.Mutex
 	sessions map[string]*list.Element
-	list *list.List
+	list     *list.List
 }
 
 type SessionStore struct {
-	sid string
+	sid          string
 	timeAccessed time.Time
-	value  map[interface{}]interface{}
+	value        map[interface{}]interface{}
 }
 
-func (st *SessionStore)Set(key,value interface{}) error{
+func (st *SessionStore) Set(key, value interface{}) error {
 	st.value[key] = value
 	pder.SessionUpdate(st.sid)
 	return nil
 }
 
-func (st *SessionStore)Get(key interface{}) interface{} {
+func (st *SessionStore) Get(key interface{}) interface{} {
 	pder.SessionUpdate(st.sid)
 	if v, ok := st.value[key]; ok {
 		return v
-	}else {
+	} else {
 		return nil
 	}
 	return nil
 }
 
-func (st *SessionStore)Delete(key interface{})error  {
-	delete(st.value,key)
+func (st *SessionStore) Delete(key interface{}) error {
+	delete(st.value, key)
 	pder.SessionUpdate(st.sid)
 	return nil
 }
 
-func (st *SessionStore)SessionID()string {
+func (st *SessionStore) SessionID() string {
 	return st.sid
 }
 
-func (pder *MProvider)SessionInit(sid string) (Session,error) {
+func (pder *MProvider) SessionInit(sid string) (Session, error) {
 	pder.lock.Lock()
 	defer pder.lock.Unlock()
-	v := make(map[interface{}]interface{},0)
-	newess := &SessionStore{sid:sid,timeAccessed:time.Now(),value:v}
+	v := make(map[interface{}]interface{}, 0)
+	newess := &SessionStore{sid: sid, timeAccessed: time.Now(), value: v}
 	element := pder.list.PushBack(newess)
 	pder.sessions[sid] = element
 	return newess, nil
@@ -175,25 +176,25 @@ func (pder *MProvider) SessionDestroy(sid string) error {
 	return nil
 }
 
-func (pder *MProvider)SessionGC(maxlifetime int64)  {
+func (pder *MProvider) SessionGC(maxlifetime int64) {
 	pder.lock.Lock()
 	defer pder.lock.Unlock()
 
-	for{
+	for {
 		element := pder.list.Back()
-		if element == nil{
+		if element == nil {
 			break
 		}
 		if (element.Value.(*SessionStore).timeAccessed.Unix() + maxlifetime) < time.Now().Unix() {
 			pder.list.Remove(element)
-			delete(pder.sessions,element.Value.(*SessionStore).sid)
-		}else {
+			delete(pder.sessions, element.Value.(*SessionStore).sid)
+		} else {
 			break
 		}
 	}
 }
 
-func (pder *MProvider)SessionUpdate(sid string) error{
+func (pder *MProvider) SessionUpdate(sid string) error {
 	pder.lock.Lock()
 	defer pder.lock.Unlock()
 	if element, ok := pder.sessions[sid]; ok {
@@ -204,20 +205,20 @@ func (pder *MProvider)SessionUpdate(sid string) error{
 	return nil
 }
 
-func count(w http.ResponseWriter,r *http.Request)  {
-	println(globalSessions.provider,989)
-	sess := globalSessions.SessionStart(w,r)
+func count(w http.ResponseWriter, r *http.Request) {
+	println(globalSessions.provider, 989)
+	sess := globalSessions.SessionStart(w, r)
 	createtime := sess.Get("createtime")
-	if createtime == nil{
-		sess.Set("createtime",time.Now().Unix())
-	}else if (createtime.(int64) + 360) < (time.Now().Unix()) {
+	if createtime == nil {
+		sess.Set("createtime", time.Now().Unix())
+	} else if (createtime.(int64) + 360) < (time.Now().Unix()) {
 		globalSessions.SessionDestroy(w, r)
 		sess = globalSessions.SessionStart(w, r)
 	}
 	ct := sess.Get("countnum")
-	if ct == nil{
+	if ct == nil {
 		sess.Set("countnum", 1)
-	}else{
+	} else {
 		sess.Set("countnum", (ct.(int) + 1))
 	}
 	t, _ := template.ParseFiles("count.gtpl")
@@ -225,8 +226,8 @@ func count(w http.ResponseWriter,r *http.Request)  {
 	t.Execute(w, sess.Get("countnum"))
 }
 
-func login(w http.ResponseWriter,r *http.Request)  {
-	session := globalSessions.SessionStart(w,r)
+func login(w http.ResponseWriter, r *http.Request) {
+	session := globalSessions.SessionStart(w, r)
 	r.ParseForm()
 	if r.Method == "GET" {
 		t, _ := template.ParseFiles("login.gtpl")
@@ -242,19 +243,19 @@ func init() {
 	println("pder初始化")
 	pder.sessions = make(map[string]*list.Element, 0)
 	println("pder注册到map里，以memory为key")
-	Register("memory",pder)
+	Register("memory", pder)
 	println("初始化Provide的名称，Cookie名称，最大存活时间")
-	globalSessions, _ = NewManager("memory","gosessionid",3600)
+	globalSessions, _ = NewManager("memory", "gosessionid", 3600)
 	println("异步并发清理session")
 	go globalSessions.GC()
 }
 
-func TestSession(t *testing.T)  {
+func TestSession(t *testing.T) {
 	println("启动服务...")
-	http.HandleFunc("/count",count)
-	http.HandleFunc("/login",login)
+	http.HandleFunc("/count", count)
+	http.HandleFunc("/login", login)
 	println("打开浏览器http://localhost:9090")
-	err := http.ListenAndServe(":9090",nil)
+	err := http.ListenAndServe(":9090", nil)
 	if err != nil {
 		log.Fatal("Listen and server:", err)
 	}

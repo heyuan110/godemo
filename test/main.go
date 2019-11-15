@@ -9,11 +9,14 @@
 */
 
 package main
-import "fmt"
-import "test/testlib"
 
-func main(){
-    fmt.Println("hello")
-    fmt.Println("1+2=",testlib.Add(1,2))
-    fmt.Println("3-2=",testlib.JianNum(3,2))
+import (
+	"fmt"
+	"test/testlib"
+)
+
+func main() {
+	fmt.Println("hello")
+	fmt.Println("1+2=", testlib.Add(1, 2))
+	fmt.Println("3-2=", testlib.JianNum(3, 2))
 }
