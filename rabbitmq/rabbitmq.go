@@ -7,10 +7,6 @@ import (
 	"time"
 )
 
-//var mqConn *amqp.Connection
-//var mqChan *amqp.Channel
-var  mqNotify chan *amqp.Error
-
 type Producer interface {
 	Message() string
 }
@@ -87,12 +83,7 @@ func (r *RabbitMQ)mqConnect() error{
 	}else{
 		LogInfo("connected successful!")
 	}
-	r.mqConnectCheck()
 	return err
-}
-
-func (r *RabbitMQ)mqConnectCheck() {
-	mqNotify  = r.connection.NotifyClose(make(chan *amqp.Error))
 }
 
 func (r *RabbitMQ)mqChannel()  error{
