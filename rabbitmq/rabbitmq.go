@@ -1,15 +1,14 @@
 package rabbitmq
 
 import (
-	"errors"
 	"fmt"
 	"github.com/streadway/amqp"
 	"sync"
 	"time"
 )
 
-var mqConn *amqp.Connection
-var mqChan *amqp.Channel
+//var mqConn *amqp.Connection
+//var mqChan *amqp.Channel
 
 type Producer interface {
 	Message() string
@@ -20,6 +19,7 @@ type Consumer interface {
 }
 
 type RabbitMQ struct {
+	serverURL string
 	connection *amqp.Connection
 	channel *amqp.Channel
 	queueName   string            // 队列名称
@@ -38,8 +38,9 @@ type Exchange struct {
 	ExType  string           // 交换机类型
 }
 
-func New(ex *Exchange) *RabbitMQ  {
+func New(serverUrl string,ex *Exchange) *RabbitMQ  {
 	return &RabbitMQ{
+		serverURL: 	  serverUrl,
 		queueName:    ex.QuName,
 		routingKey:   ex.RtKey,
 		exchangeName: ex.ExName,
@@ -68,46 +69,45 @@ func (r *RabbitMQ)RegisterConsumer(consumer Consumer)  {
 	r.mu.Unlock()
 }
 
-func (r *RabbitMQ)mqConnect()  {
+func (r *RabbitMQ)mqConnect() error{
 	var err error
-	userName := "bruce1"
-	password := "patpat"
-	host := "192.168.8.131"
-	port := 5678
-	rabbitmqServerUrl := fmt.Sprintf("amqp://%s:%s@%s:%d/",userName,password,host,port)
-	mqConn,err = amqp.Dial(rabbitmqServerUrl)
-	r.connection = mqConn
-	showError(err,"Failed to connect Rabbitmq server ")
-	mqChan,err = mqConn.Channel()
-	r.channel = mqChan
-	showError(err,"Failed to open a channel")
+	logInfo("connect to ",r.serverURL)
+	r.connection,err = amqp.Dial(r.serverURL)
+	if err != nil{
+		logError(err,"Failed to connect Rabbitmq server ")
+	}else{
+		logInfo("connected successful!")
+	}
+	return err
 }
 
-func (r *RabbitMQ)mqClose()  {
-	err := r.channel.Close()
-	showError(err,"Failed to close channel")
-	err = r.connection.Close()
-	showError(err,"Failed to close connection")
+func (r *RabbitMQ)mqChannel()  error{
+	var err error
+	r.channel,err= r.connection.Channel()
+	if err != nil{
+		logError(err,"Failed to open a channel")
+	}else{
+		logInfo("open a channel")
+	}
+	return err
 }
 
 func (r *RabbitMQ)exchangeDeclare() error {
-	err := r.channel.ExchangeDeclarePassive(r.exchangeName,r.exchangeType,true,false,false,true,nil)
+	err :=  r.channel.ExchangeDeclare(r.exchangeName, r.exchangeType, true, false, false, true, nil)
 	if err != nil {
-		err =  r.channel.ExchangeDeclare(r.exchangeName, r.exchangeType, true, false, false, true, nil)
-		if err != nil {
-			showError(err,"Failed to declare exchange")
-		}
+		logError(err,"Failed to declare exchange")
+	}else{
+		logInfo("exchange declare:",r.exchangeName,r.exchangeType)
 	}
 	return err
 }
 
 func (r *RabbitMQ)queueDeclare() error {
-	_,err := r.channel.QueueDeclarePassive(r.queueName,true,false,false,true,nil)
+	_,err := r.channel.QueueDeclare(r.queueName,true,false,false,true,nil)
 	if err != nil{
-		_,err = r.channel.QueueDeclare(r.queueName,true,false,false,true,nil)
-		if err != nil{
-			showError(err,"Failed to declare the queue")
-		}
+		logError(err,"Failed to declare the queue")
+	}else{
+		logInfo("queue declare:",r.queueName)
 	}
 	return err
 }
@@ -115,7 +115,9 @@ func (r *RabbitMQ)queueDeclare() error {
 func (r *RabbitMQ)queueBind() error {
 	err := r.channel.QueueBind(r.queueName,r.routingKey,r.exchangeName,true,nil)
 	if err != nil {
-		showError(err,"Failed to bind the queue")
+		logError(err,"Failed to bind the queue")
+	}else{
+		logInfo("queue bind:","queue->",r.queueName,",routing key->",r.routingKey,"exchange->",r.exchangeName)
 	}
 	return err
 }
@@ -126,7 +128,11 @@ func (r *RabbitMQ)publishMessage(msg string) error {
 		Timestamp:       time.Time{},
 		Body:            []byte(msg),
 	})
-	showError(err,"Failed to publish the message")
+	if err != nil{
+		logError(err,"Failed to publish the message")
+	}else{
+		logInfo("publish to exchange:",r.exchangeName," message:",msg)
+	}
 	return err
 }
 
@@ -134,52 +140,58 @@ func (r *RabbitMQ)consumeMessage(consumer Consumer) {
 	err :=r.channel.Qos(1,0,true)
 	msgList,err := r.channel.Consume(r.queueName,"test",false,false,false,false,nil)
 	if err != nil{
-		showError(err,"Failed to consume message")
+		logError(err,"Failed to consume message")
 		return
 	}
 	for msg :=  range msgList {
 		err := consumer.ConsumeMessage(msg.Body)
 		if err != nil {
-			showError(err,"Consumption Message is failure")
+			logError(err,"Consumption Message is failure")
 			err = msg.Ack(true)
 			if err != nil {
-				showError(err,"Consumption message failed, call ack has an exception,messageID: "+msg.MessageId)
+				logError(err,"Consumption message failed, call ack has an exception,messageID: "+msg.MessageId)
 			}
 		}else{
 			//multiple value must false
 			err = msg.Ack(false)
 			if err != nil {
-				showError(err,"Consumption message succeed, call ack has an exception,messageID: "+msg.MessageId)
+				logError(err,"Consumption message succeed, call ack has an exception,messageID: "+msg.MessageId)
 			}
 		}
 	}
 }
 
-func (r *RabbitMQ)assemble() error {
-	var err error = errors.New("failure")
-	//create a connection, create a channel
-	if r.channel == nil {
-		r.mqConnect()
-	}
+func (r *RabbitMQ)assembleQueue() error {
 	//declare a exchange
-	if r.exchangeDeclare() != nil {
+	err := r.exchangeDeclare()
+	if err != nil {
 		return err
 	}
 	//declare a queue
-	if r.queueDeclare() != nil {
+	err = r.queueDeclare()
+	if err != nil {
 		return err
 	}
 	//bind exchange and queue
-	if r.queueBind() != nil {
+	err = r.queueBind()
+	if err != nil {
 		return err
 	}
-	return  nil
+	return  err
 }
 
 func (r *RabbitMQ)listenProducer(producer Producer)  {
-	//close channel, connnection
-	defer r.mqClose()
-	if r.assemble() != nil {
+	if r.mqConnect() != nil{
+		return
+	}else{
+		defer r.mqConnectClose()
+	}
+	if r.mqChannel() != nil{
+		return
+	}else{
+		defer r.mqChannelClose()
+	}
+	if r.assembleQueue() != nil {
 		return
 	}
 	//publish message
@@ -189,15 +201,53 @@ func (r *RabbitMQ)listenProducer(producer Producer)  {
 }
 
 func (r *RabbitMQ)listerConsumer(consumer Consumer)  {
-	defer r.mqClose()
-	if r.assemble() != nil {
+	if r.mqConnect() != nil{
+		return
+	}else{
+		defer r.mqConnectClose()
+	}
+	if r.mqChannel() != nil{
+		return
+	}else{
+		defer r.mqChannelClose()
+	}
+	if r.assembleQueue() != nil {
 		return
 	}
 	r.consumeMessage(consumer)
 }
 
-func showError(err error,msg string)  {
+func (r *RabbitMQ)mqChannelClose() {
+	err := r.channel.Close()
+	if err != nil{
+		logError(err,"Failed to close channel")
+	}else{
+		logInfo("channel closed")
+	}
+}
+
+func (r *RabbitMQ)mqConnectClose() {
+	err := r.connection.Close()
+	if err != nil{
+		logError(err,"Failed to close connection")
+	}else{
+		logInfo("connection closed")
+	}
+}
+
+func (r *RabbitMQ)mqClose()  {
+	r.mqChannelClose()
+	r.mqConnectClose()
+}
+
+func logInfo(a ...interface{})  {
+	a = append(a[:1],a[0:]...)
+	a[0] = time.Now().String()
+	fmt.Println(a...)
+}
+
+func logError(err error,msg string)  {
 	if err != nil {
-		fmt.Printf("%s:%s\n",msg,err)
+		fmt.Printf("%s %s:%s\n",time.Now().String(),msg,err)
 	}
 }
