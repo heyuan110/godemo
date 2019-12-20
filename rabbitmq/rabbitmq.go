@@ -20,6 +20,7 @@ type RabbitMQServer struct {
 	Port int
 	User string
 	Password string
+	VHost string
 }
 
 type RabbitMQ struct {
@@ -43,7 +44,10 @@ type Exchange struct {
 }
 
 func New(s RabbitMQServer,ex *Exchange) *RabbitMQ  {
-	url := fmt.Sprintf("amqp://%s:%s@%s:%d/",s.User,s.Password,s.Host,s.Port)
+	if s.VHost == "/" {
+		s.VHost = ""
+	}
+	url := fmt.Sprintf("amqp://%s:%s@%s:%d/%s",s.User,s.Password,s.Host,s.Port,s.VHost)
 	return &RabbitMQ{
 		serverURL: 	  url,
 		queueName:    ex.QuName,

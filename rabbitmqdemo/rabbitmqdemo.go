@@ -13,6 +13,7 @@ var (
 	mqPort = flag.Int("p",5672,"Port")
 	mqUserName = flag.String("u","guest","User Name")
 	mqPassword = flag.String("pwd","guest","Password")
+	mqVHost = flag.String("vhost","/","Virtual Hosts")
 )
 
 type Chat struct {
@@ -58,6 +59,7 @@ func main() {
 		Port:     *mqPort,
 		User:     *mqUserName,
 		Password: *mqPassword,
+		VHost: *mqVHost,
 	}
 	ex:=&rabbitmq.Exchange{
 		QuName: "test.rabbitmq",
