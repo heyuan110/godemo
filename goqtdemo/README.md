@@ -5,7 +5,7 @@ using the library of <https://github.com/therecipe/qt>
 
 ## Run
 
-1. Configure the development environment with reference to <https://github.com/therecipe/qt>
+1. Configure the development environment with reference to <https://github.com/therecipe/qt/wiki>
 1. Download the code, run ` qtdeploy test desktop`
 
 ## Preview screenshot
