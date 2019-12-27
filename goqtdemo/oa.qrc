@@ -1,0 +1,6 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+<file>qml/login.qml</file>
+<file>assets/images/bg.jpg</file>
+</qresource>
+</RCC>
